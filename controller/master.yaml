@@ -1,0 +1,129 @@
+version: AppSecPipeline 0.6.0
+
+global:
+  min-severity: medium
+
+profiles:
+  sourcecode:
+    pipeline:
+      - tool: "git"
+        options: "clone"
+      - tool: "cloc"
+        options: "all"
+      - tool: "bandit"
+        options: "tuned"
+      - tool: "brakeman"
+        options: "tuned"
+      - tool: "retirejs"
+        options: "all"
+      - tool: "defectdojo"
+        options: "all"
+    startup: 
+    run-every: 
+    final: 
+
+  standard:
+    pipeline:
+     - tool: "cloc"
+       options: "all"
+     - tool: "nikto"
+       options: "fast"
+     - tool: "arachni"
+       options: "xss"
+     - tool: "bandit"
+       options: "tuned"
+     - tool: "brakeman"
+       options: "tuned"
+     - tool: "retirejs"
+       options: "all"
+     - tool: "defectdojo"
+       options: "all"
+    startup: 
+    run-every: 
+    final:
+
+  debug-test:
+    startup:
+      - tool: git
+        options: clone
+    pipeline:
+      - tool: "bandit"
+        options: "all"
+#    runevery:
+#      - tool: defectdojo
+#        options: engagement
+    final:
+      - tool: defectdojo
+        options: close_engagement
+
+  production:
+    pipeline:
+      - tool: "git"
+        options: "clone"
+      - tool: "nmap"
+        options: "quick"
+      - tool: "ssllabs"
+        options: "all"
+    startup:
+      - tool: prepenv
+        options: all
+    runevery:
+      - tool: defectdojo
+        options: engagement
+    final:
+      - tool: defectdojo
+        options: close_engagement
+
+
+  ssllabs:
+    pipeline:
+      - tool: "ssllabs"
+        options: "all"
+
+  wpscan:
+    pipeline:
+      - tool: "wpscan"
+        options: "all_enumeration"
+
+  nmap:
+    pipeline:
+      - tool: "nmap"
+        options: "quick"
+      - tool: "defectdojo"
+        options: "all"
+
+  defectdojo:
+    pipeline:
+      - tool: "defectdojo"
+        options: "all"
+
+  dynamic:
+    pipeline:
+      - tool: "nikto"
+        options: "tuned"
+      - tool: "arachni"
+        options: "xss"
+      - tool: "defectdojo"
+        options: "all"
+
+  static:
+    pipeline:
+      - tool: "cloc"
+        options: "all"
+      - tool: "bandit"
+        options: "tuned"
+      - tool: "brakeman"
+        options: "tuned"
+      - tool: "retirejs"
+        options: "all"
+      - tool: "snyk"
+        options: "all"
+      - tool: "dependency-check"
+        options: "all"
+      - tool: "defectdojo"
+        options: "all"
+
+  analyze-code:
+    pipeline:
+      - tool: "cloc"
+        options: "all"
