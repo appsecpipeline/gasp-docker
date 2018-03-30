@@ -44,14 +44,13 @@ profiles:
 
   debug-test:
     startup:
-      - tool: git
-        options: clone
+      - tool: "cloc"
+        options: "all"
+      - tool: "git"
+        options: "clone"
     pipeline:
       - tool: "bandit"
         options: "all"
-#    runevery:
-#      - tool: defectdojo
-#        options: engagement
     final:
       - tool: defectdojo
         options: close_engagement

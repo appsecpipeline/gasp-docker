@@ -2,6 +2,7 @@
 package gasp
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -55,35 +56,38 @@ type Event interface {
 
 // Struct for event arguments
 type EventArgs struct {
-	Required    []string          // names of required fields will be in this slice of strings
 	Profile     string            // Required - named pipeline from master.yaml, appsec.pipeline or [app name]-pipeline.yaml
-	Dir         string            // default to empty string - local directory to copy to Docke shared volume
-	DryRun      bool              // default = false - Do this pipeline run without launching actual dockers, etc
-	Clean       bool              // default = false - Remove the containers and volumes once completed
-	Vol         string            // default = "" - Specify the name of the results volumne to use
-	AppName     string            // default = "" - Name of the app being tested
-	EventType   string            // default = "Command-line" - Type of event that caused the pipeline run
-	AppProfile  string            // default = "" - App specific pipeline profile to run sent in [app-name]-pipeline.yaml
-	AppToolProf string            // default = "" - App specific tool profile to use during pipeline run from [app-name]-tool.yaml
-	Target      string            // default = "" - Docker name of the target for the pipeline run - to be launched before run
-	PipeType    string            // Required - {"static", "dynamic"}
-	Loc         string            // default = "" - Location of source code for static test runs
-	ToolConf    map[string]string // Required - Parameters needed to run each tool in the named pipeline
-	DojoHost    string            // Required - host name of the Dojo instance to push the run restults to
-	DojoApiKey  string            // Required - API key to talk to Dojo's REST API
-	DojoProdId  string            // Required - The Product ID from Dojo to submit the results for this test run
-	//DojoNewEng boot // default = true - Create a new engagement for each pipeline run?
+	AppName     string            // Required - The name of the app the application that is the target of this pipeline run
+	Target      string            // Required - The target to use for this pipeline run, generally a repo URL for SAST or URL for DAST
+	PipeType    string            // Required - Type of pipeline run - currently SAST (static) or DAST (dynamic) are supported")
+	Dir         string            // default = "none" - The full path to a local directory which contains code for SAST pipeline runs
+	DryRun      bool              // default = false - Run he pipeline without actually launching containers, basically loging only
+	Clean       bool              // default = true - Remove any containers used during the pipeline run
+	Vol         string            // default = "none" - The full path to a local directory to use as the results volume instead of a data container
+	AppProfile  string            // default = "none" - The application specific named pipeline (profile) to use for this run set in [app-name]-pipeline.yaml
+	AppToolProf string            // default = "none" - The custom tool profile to override the default tool profile as defined in [app-name]-tool.yaml
+	Loc         string            // default = "/opt/appsecpipeline/source" - Path to where the sourcecode is on the container
+	ParamsRaw   string            // default = "" - Required parametetrs for the pipeline tools in this run
+	ToolConf    map[string]string // calculated - map["name of tool":"string that contains parameters for tool]
+	//                               e.g. ["bandit":"LOC=/opt/appsecpipeline/source"]
 }
 
 // Sturct for master.yaml aka main configuration
 type M struct {
-	Version string              `yaml:"version"`
-	Global  Gconf               `yaml:"global"`
-	Prof    map[string]Profiles `yaml:"profiles"`
+	Version    string              `yaml:"version"`
+	Global     Gconf               `yaml:"global"`
+	Prof       map[string]Profiles `yaml:"profiles"`
+	Deployment Deploy              `yaml:"deployment"`
 }
 
 type Gconf struct {
-	MinSev string `yaml:"min-severity"`
+	MinSev      string `yaml:"min-severity"`
+	MaxToolRun  int    `yaml:"max-tool-run"`
+	MaxParallel int    `yaml:"max-parallel"`
+	MaxDynamic  int    `yaml:"max-dynamic"`
+	MaxCrital   int    `yaml:"max-critical"`
+	MaxHigh     int    `yaml:"max-high"`
+	MaxMedium   int    `yaml:"max-medium"`
 }
 
 type Profiles struct {
@@ -94,20 +98,28 @@ type Profiles struct {
 }
 
 type Tools struct {
-	Tool    string `yaml:"tool"`
-	Options string `yaml:"options"`
+	Tool        string `yaml:"tool"`
+	ToolProfile string `yaml:"tool-profile"`
+	MinSev      string `yaml:"min-severity"`
+	OnFailure   string `yaml:"on-failure"`
+}
+
+type Deploy struct {
+	Master  string `yaml:"master"`
+	Devel   string `yaml:"sast"`
+	Preprod string `yaml:"pre-prod"`
 }
 
 // Struct for secpipeline-config.yaml aka tools configuration
 type S struct {
-	Version string             `yaml:"version"`
-	T       map[string]SecTool `yaml:"tools"`
+	T map[string]SecTool `yaml:"tools"`
 }
 
 type SecTool struct {
 	Version       string            `yaml:"version"`
+	ToolVer       string            `yaml:"tool-version"`
 	Tags          []string          `yaml:"tags"`
-	TType         string            `yaml:"type"`
+	ToolType      string            `yaml:"type"`
 	ScanType      string            `yaml:"scan_type"`
 	IconSm        string            `yaml:"icon-sm"`
 	IconLg        string            `yaml:"icon-lg"`
@@ -205,15 +217,23 @@ func (l *LocalConfigs) ReadSecPipe(sec *S, c ConfigOpts) {
 
 	fpath := path.Join(c.Path, l.ToolFile)
 
-	f, err := ioutil.ReadFile(fpath)
+	f, err := os.Open(fpath)
 	if err != nil {
 		fmt.Println("Problem reading secpipeline-conf.yaml from ", fpath)
 		fmt.Printf("Error is: %s", err)
 	}
 
-	err = yaml.Unmarshal(f, sec)
+	// Massage secpipeline-conf.yaml to account for yaml library not liking its format
+	contents := "tools:\n"
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := "  " + scanner.Text()
+		contents = contents + line + "\n"
+	}
+
+	err = yaml.Unmarshal([]byte(contents), sec)
 	if err != nil {
-		fmt.Println("error: %v", err)
+		fmt.Println("Error parsing secpipeline-conf.yaml: %v", err)
 	}
 }
 
