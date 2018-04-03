@@ -116,7 +116,7 @@ func (levent *LocalEvent) Startup(run *runInfo) {
 	vol, err := launchVolume(run)
 	if err != nil {
 		warnLog.Printf("Error creating data volme during startup stage of run %s", run.name)
-		ErrorLog.Printf("Error creating data volme was: %s", err)
+		errorLog.Printf("Error creating data volme was: %s", err)
 		errorLog.Println("Unable to data volume for this run, quitting")
 		os.Exit(1)
 	}
@@ -129,7 +129,7 @@ func (levent *LocalEvent) Startup(run *runInfo) {
 	err = volumePerms(vol, run)
 	if err != nil {
 		warnLog.Printf("Error setting permissions on the data volme during startup stage of run %s", run.name)
-		ErrorLog.Printf("Error setting volme permissions was: %s", err)
+		errorLog.Printf("Error setting volme permissions was: %s", err)
 		errorLog.Println("Unable to set permissions on data volume for this run, quitting")
 		os.Exit(1)
 	}
@@ -140,7 +140,7 @@ func (levent *LocalEvent) Startup(run *runInfo) {
 		err := launchContainer(run.startup[i], run)
 		if err != nil {
 			warnLog.Printf("Error launching container during startup stage of run %s", run.name)
-			ErrorLog.Printf("Error launching container was: %s", err)
+			errorLog.Printf("Error launching container was: %s", err)
 			errorLog.Println("Unable to launch container for this run, quitting")
 			os.Exit(1)
 		}
@@ -159,7 +159,7 @@ func (levent *LocalEvent) Pipeline(run *runInfo) {
 		err := launchContainer(run.pipeline[i], run)
 		if err != nil {
 			warnLog.Printf("Error launching container during pipeline stage of run %s", run.name)
-			ErrorLog.Printf("Error launching container was: %s", err)
+			errorLog.Printf("Error launching container was: %s", err)
 			errorLog.Println("Unable to launch container for this run, quitting")
 			os.Exit(1)
 		}
@@ -177,7 +177,7 @@ func (levent *LocalEvent) Final(run *runInfo) {
 		err := launchContainer(run.final[i], run)
 		if err != nil {
 			warnLog.Printf("Error launching container during final stage of run %s", run.name)
-			ErrorLog.Printf("Error launching container was: %s", err)
+			errorLog.Printf("Error launching container was: %s", err)
 			errorLog.Println("Unable to launch container for this run, quitting")
 			os.Exit(1)
 		}
