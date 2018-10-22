@@ -53,45 +53,23 @@ func (ldock *LocalDockers) SyncImages(sec *g.S) {
 type LocalEvent struct {
 }
 
-func (levent *LocalEvent) ReadArgs(args *map[string]string, evArgs *g.EventArgs) {
+func (levent *LocalEvent) ReadArgs(args *g.EventArgs, evArgs *g.EventArgs) {
 	fmt.Println("In ReadArgs function")
 
-	// Do some initial 'type conversions'
-	a := *args
-	var d, c bool
-	switch a["dryRun"] {
-	case "true":
-		d = true
-	case "false":
-		d = false
-	default:
-		// Force the default for creating args
-		errorLog.Println("Something other then 'true' or 'false' entered for dry-run (-r), forcing to default of 'false'")
-		d = false
-	}
-	switch a["clean"] {
-	case "true":
-		c = true
-	case "false":
-		c = false
-	default:
-		// Force the default for creating args
-		errorLog.Println("Something other then 'true' or 'false' entered for clean (-c), forcing to default of 'true'")
-		c = true
-	}
+	// TODO: This method may not be neededs since we create a g.EventArgs in run.go - verify this
 
-	evArgs.Profile = a["profile"]
-	evArgs.AppName = a["appName"]
-	evArgs.Target = a["target"]
-	evArgs.PipeType = a["pipeType"]
-	evArgs.Dir = a["dir"]
-	evArgs.DryRun = d
-	evArgs.Clean = c
-	evArgs.Vol = a["vol"]
-	evArgs.AppProfile = a["appProfile"]
-	evArgs.AppToolProf = a["toolProfile"]
-	evArgs.Loc = a["loc"]
-	evArgs.ParamsRaw = a["params"]
+	evArgs.Profile = args.Profile
+	evArgs.AppName = args.AppName
+	evArgs.Target = args.Target
+	evArgs.DryRun = args.DryRun
+	evArgs.Keep = args.Keep
+	evArgs.Vol = args.Vol
+	evArgs.Src = args.Src
+	evArgs.Rpt = args.Rpt
+	evArgs.AppProfile = args.AppProfile
+	evArgs.AppToolProf = args.AppToolProf
+	evArgs.Loc = args.Loc
+	evArgs.ParamsRaw = args.ParamsRaw
 	// Note: evArgs.ToocConf is set in verifyRun as part of the runInfo struct
 }
 
@@ -111,27 +89,11 @@ func (levent *LocalEvent) Startup(run *runInfo) {
 	// Handle any defined startup tool runs for this named pipeline
 	infoLog.Printf("In Startup stage of %v run...", run.name)
 
-	// Create a results volume which may also be used for source code for SAST
-	fmt.Println("Calling launchVolume")
-	vol, err := launchVolume(run)
-	if err != nil {
-		warnLog.Printf("Error creating data volme during startup stage of run %s", run.name)
-		errorLog.Printf("Error creating data volme was: %s", err)
-		errorLog.Println("Unable to data volume for this run, quitting")
-		os.Exit(1)
-	}
-	fmt.Println("Created volume named ", vol)
-
-	// Set results volume for this run
-	run.resultsVol = vol
-
-	// Adjust the file permission of the volume to use the appsecpipeline user
-	err = volumePerms(vol, run)
-	if err != nil {
-		warnLog.Printf("Error setting permissions on the data volme during startup stage of run %s", run.name)
-		errorLog.Printf("Error setting volme permissions was: %s", err)
-		errorLog.Println("Unable to set permissions on data volume for this run, quitting")
-		os.Exit(1)
+	// Determie if this run uses local filesystem or an ephemeral data volume
+	// If there's no run.Vol, then create the ephemeral data volume
+	if run.Vol == "none" {
+		// Create the data volume
+		dataVolume(run)
 	}
 
 	// Interate over the defined startup steps, running them in order
@@ -169,7 +131,7 @@ func (levent *LocalEvent) Pipeline(run *runInfo) {
 func (levent *LocalEvent) Final(run *runInfo) {
 	// Handle any defined final tool runs for this named pipeline
 	infoLog.Printf("In Final stage of %v run...", run.name)
-	fmt.Printf("In Final stage of ", run.name)
+	fmt.Printf("In Final stage of %v\n run ", run.name)
 
 	// Interate over the defined pipeline steps, running them in order
 	for i := 0; i < len(run.final); i++ {
@@ -206,9 +168,14 @@ type runInfo struct {
 	sentParams   map[string]string
 	runId        string
 	detailed     *os.File // detailed logging
-	resultsVol   string   // results volume used for this run
+	dataVol      string   // The name of the ephemeral data volume used
+	Vol          string   // The path of the local file system to use for /opt/appsecpipeline
+	Src          string   // The path of the local file system to use for /opt/appsecpipeline/source
+	Rpt          string   // The path of the local file system to use for /opt/appsecpipeline/reports
 	runContainer []string // slice of containers run/launched in this run
 	runVolume    []string // slice of volumes run/launced in this run
+	keep         bool
+	dryRun       bool
 }
 
 func listImages(ldock *LocalDockers) []Image {
@@ -303,21 +270,61 @@ func pullImages(i map[string]bool) {
 	infoLog.Println("Completed pulling needed images")
 }
 
+func dataVolume(run *runInfo) {
+	fmt.Println("In dataVolume")
+
+	// Create a data volume which will hold source and results for this run
+	fmt.Println("Calling launchVolume")
+	vol, err := launchVolume(run)
+	if err != nil {
+		warnLog.Printf("Error creating data volme during startup stage of run %s", run.name)
+		errorLog.Printf("Error creating data volme was: %s", err)
+		errorLog.Println("Unable to data volume for this run, quitting")
+		os.Exit(1)
+	}
+	fmt.Println("Created volume named ", vol)
+
+	// Set results volume for this run
+	run.dataVol = vol
+
+	// Adjust the file permission of the volume to use the appsecpipeline user
+	err = volumePerms(vol, run)
+	if err != nil {
+		warnLog.Printf("Error setting permissions on the data volme during startup stage of run %s", run.name)
+		errorLog.Printf("Error setting volme permissions was: %s", err)
+		errorLog.Println("Unable to set permissions on data volume for this run, quitting")
+		os.Exit(1)
+	}
+}
+
 func launchVolume(run *runInfo) (string, error) {
 	// Create a data volume to use for tools results and possibly SAST targets
 	vname := "data_" + run.runId
 
-	cmd := exec.Command("docker", "volume", "create", vname)
-	var sOut, sErr bytes.Buffer
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-	err := cmd.Run()
-	if err != nil {
-		errorLog.Printf("Error creating data volume %s, errror was: %s", vname, sOut.String())
-		errorLog.Println("Unable to create data volume, quitting")
-		os.Exit(1)
+	fmt.Printf("run.dryRun is %v\n", run.dryRun)
+
+	//	if !run.dryRun {
+	//		fmt.Println("INSIDE IF")
+	//		fmt.Printf("run.dryRun is %v\n", run.dryRun)
+	//	} else {
+	//		fmt.Println("INSIDE ELSE")
+	//		fmt.Printf("run.dryRun is %v\n", run.dryRun)
+	//	}
+
+	if !run.dryRun {
+		fmt.Println("NO DRY RUN - CREATING VOLUME")
+		cmd := exec.Command("docker", "volume", "create", vname)
+		var sOut, sErr bytes.Buffer
+		cmd.Stdout = &sOut
+		cmd.Stderr = &sErr
+		err := cmd.Run()
+		if err != nil {
+			errorLog.Printf("Error creating data volume %s, errror was: %s", vname, sOut.String())
+			errorLog.Println("Unable to create data volume, quitting")
+			os.Exit(1)
+		}
+		io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
 	}
-	io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
 	infoLog.Printf("Success creating data volume %s\n", vname)
 
 	return vname, nil
@@ -333,20 +340,23 @@ func volumePerms(vol string, run *runInfo) error {
 
 	// Container can be any AppSec Pipeline image, since minimum named pipeline must have at least 1 tool for
 	// the pipeline stage, we can safely set the container name to the first pipeline tool's container image
-	container := run.toolProfiles[(run.pipeline[0].Tool)].Docker
-	cmd := exec.Command("docker", "run", "-v", volMount, "--name", dName,
-		"--user=root", "--rm", "--entrypoint", "chown", container,
-		"-R", "appsecpipeline:appsecpipeline", "/opt/appsecpipeline")
-	var sOut, sErr bytes.Buffer
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-	err := cmd.Run()
-	if err != nil {
-		errorLog.Printf("Error setting file permissions on data volume %s, errror was: %s\n%s", vol, sErr.String(), err)
-		errorLog.Println("Unable to create data volume with needed file permissions, quitting")
-		os.Exit(1)
+	//container := run.toolProfiles[(run.pipeline[0].Tool)].Docker
+	container := "mtesauro/gasp-base:1.0.0" // TODO: Revert this
+	if !run.dryRun {
+		cmd := exec.Command("docker", "run", "-v", volMount, "--name", dName,
+			"--user=root", "--rm", "--entrypoint", "chown", container,
+			"-R", "appsecpipeline:appsecpipeline", "/opt/appsecpipeline")
+		var sOut, sErr bytes.Buffer
+		cmd.Stdout = &sOut
+		cmd.Stderr = &sErr
+		err := cmd.Run()
+		if err != nil {
+			errorLog.Printf("Error setting file permissions on data volume %s, errror was: %s\n%s", vol, sErr.String(), err)
+			errorLog.Println("Unable to create data volume with needed file permissions, quitting")
+			os.Exit(1)
+		}
+		io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
 	}
-	io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
 	infoLog.Printf("Successfully set file permissions on data volume %s\n", vol)
 
 	return nil
@@ -356,19 +366,43 @@ func volumePerms(vol string, run *runInfo) error {
 func launchContainer(tool g.Tools, run *runInfo) error {
 	// Run the provided tool from this portion of the named pipeline run
 	dName := tool.Tool + "_" + run.runId
-	volMount := run.resultsVol + ":/opt/appsecpipeline/"
+
+	// Deterine mounting for data volume(s) - local filesystem or emphemeral data volume
+	volMount := ""
+	if run.Vol == "none" {
+		// Use the ephemeral data volume
+		volMount = run.dataVol + ":/opt/appsecpipeline/"
+	} else {
+		// Use the provided local filesytem path
+		volMount = run.Vol + ":/opt/appsecpipeline/"
+	}
 
 	// Build the command for this tool
 	args := []string{
 		"run",
 		"-v", volMount,
-		//"--rm",  Keep images for debug
-		"--net=host",
-		"--name", dName,
-		//"--user", "root", Not needed with gasp dockers
-		//"--entrypoint", Not needed with gasp dockers
-		run.toolProfiles[tool.Tool].Docker,
 	}
+
+	// Keep or remove container based on -k/--keep flag
+	if !run.keep {
+		args = append(args, "--rm")
+	}
+
+	// If provided, mount the local filesystem path that has source code
+	if run.Src != "none" {
+		lv := run.Src + ":/opt/appsecpipeline/source"
+		fmt.Printf("Local volume is:\n  =>%s<=\n", lv)
+		args = append(args, "-v", lv)
+	}
+
+	// Add more default args
+	args = append(args, "--net=host", "--name", dName)
+
+	//"--user", "root", Not needed with gasp dockers
+	//"--entrypoint", Not needed with gasp dockers
+
+	// Add the container for the current tool
+	args = append(args, run.toolProfiles[tool.Tool].Docker)
 
 	toolCmd := genToolCmd(tool.Tool, tool.ToolProfile, run)
 	fmt.Printf("Tool Command is %+v\n", toolCmd)
@@ -380,23 +414,24 @@ func launchContainer(tool g.Tools, run *runInfo) error {
 	infoLog.Printf("ARGS sent to docker were %+v\n", args)
 	fmt.Printf("ARGS sent to docker were %+v\n", args)
 
-	// Run the container
-	cmd := exec.Command("docker", args...)
-	var sOut, sErr bytes.Buffer
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-	err := cmd.Run()
-	if err != nil {
-		errorLog.Printf("Error launching container %s, errror was: %s\n%s\n%s", dName, sErr.String(), err, sOut.String())
-		errorLog.Println("Unable to launch container for pipeline stage, quitting")
-		os.Exit(1)
+	if !run.dryRun {
+		// Run the container
+		cmd := exec.Command("docker", args...)
+		var sOut, sErr bytes.Buffer
+		cmd.Stdout = &sOut
+		cmd.Stderr = &sErr
+		err := cmd.Run()
+		if err != nil {
+			errorLog.Printf("Error launching container %s, errror was: %s\n%s\n%s", dName, sErr.String(), err, sOut.String())
+			errorLog.Println("Unable to launch container for pipeline stage, quitting")
+			os.Exit(1)
+		}
+		io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
+		// TODO: Write these to gasp-log
+		fmt.Printf("StdOut is %v\n", sOut.String())
+		fmt.Printf("StdErr is %v\n", sErr.String())
 	}
-	io.Copy(run.detailed, bytes.NewReader(sOut.Bytes()))
 	infoLog.Printf("Successfully launched container %s\n", dName)
-
-	// TODO: Write these to gasp-log
-	fmt.Printf("StdOut is %v\n", sOut.String())
-	fmt.Printf("StdErr is %v\n", sErr.String())
 
 	return nil
 }
@@ -480,6 +515,13 @@ func cmdSub(c string, tool string, run *runInfo) string {
 func verifyRun(ev *g.EventArgs, mstr *g.M, sec *g.S, run *runInfo) {
 	// Sanity check the provided arguments vs the config files for any issues before starting the run
 	fmt.Println("In verifyRun")
+
+	// Move over needed command-line options
+	run.keep = ev.Keep
+	run.dryRun = ev.DryRun
+	run.Vol = ev.Vol
+	run.Src = ev.Src
+	run.Rpt = ev.Rpt
 
 	// Set the named pipeline for this run
 	run.name = ev.Profile
@@ -678,7 +720,7 @@ func verifyOptions(run *runInfo) {
 	}
 }
 
-func LoadPipeline(args *map[string]string) {
+func LoadPipeline(args *g.EventArgs) {
 	// Start gasp-docker logging
 	l := g.SetupLogging("gasp-docker", logDir, true)
 	traceLog = l["trace"]
@@ -740,6 +782,12 @@ func LoadPipeline(args *map[string]string) {
 	singleRun.detailed = dL
 	defer dL.Close()
 
+	//	fmt.Printf("The value of keep is %v\n", singleRun.keep)
+	//	fmt.Printf("The value of dryRun is %v\n", singleRun.dryRun)
+	//	fmt.Printf("The type of keep is %T\n", singleRun.keep)
+	//	fmt.Printf("The type of dryRun is %T\n", singleRun.dryRun)
+	//os.Exit(0)
+
 	// Run startup stage
 	le.Startup(&singleRun)
 
@@ -758,11 +806,11 @@ func LoadPipeline(args *map[string]string) {
 	// DEBUG INFO
 	fmt.Println("\nDEBUG INFO\n")
 	fmt.Println("Clean up dockers from ths run with:")
-	fmt.Printf("docker rm set-perms_%s\n", singleRun.runId)
-	fmt.Printf("docker rm git_%s\n", singleRun.runId)
-	fmt.Printf("docker rm cloc_%s\n", singleRun.runId)
-	fmt.Printf("docker rm bandit_%s\n", singleRun.runId)
-	fmt.Printf("docker rm defectdojo_%s\n", singleRun.runId)
+	//fmt.Printf("docker rm set-perms_%s\n", singleRun.runId)
+	//fmt.Printf("docker rm git_%s\n", singleRun.runId)
+	//fmt.Printf("docker rm cloc_%s\n", singleRun.runId)
+	//fmt.Printf("docker rm bandit_%s\n", singleRun.runId)
+	//fmt.Printf("docker rm defectdojo_%s\n", singleRun.runId)
 	fmt.Printf("docker volume rm data_%s\n\n", singleRun.runId)
 	os.Exit(0)
 

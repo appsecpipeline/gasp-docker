@@ -161,15 +161,24 @@ profiles:
      - tool: "defectdojo"
        tool-profile: "all"
 
+  local-volume:
+    startup:
+      - tool: "cloc"
+        tool-profile: "all"
+    pipeline:
+     - tool: "bandit"
+       tool-profile: "all"
+
   analyze-code:
+    startup:
+      - tool: "git"
+        tool-profile: "clone"
     pipeline:
      - tool: "cloc"
        tool-profile: "all"
 
-  debug-test:
+  gasp-example:
     startup:
-#      - tool: "cloc"
-#        tool-profile: "all"
       - tool: "git"
         tool-profile: "clone"
     pipeline:

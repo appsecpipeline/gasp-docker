@@ -69,6 +69,12 @@
 			"revisionTime": "2017-10-17T18:19:29Z"
 		},
 		{
+			"checksumSHA1": "40vJyUB4ezQSn/NSadsKEOrudMc=",
+			"path": "github.com/inconshreveable/mousetrap",
+			"revision": "76626ae9c91c4f2a10f34cad8ce83ea42c93bb75",
+			"revisionTime": "2014-10-17T20:07:13Z"
+		},
+		{
 			"checksumSHA1": "NiPRC0JDsfCFir75S1TrFHPP8+M=",
 			"path": "github.com/magiconair/properties",
 			"revision": "2c9e9502788518c97fe44e8955cd069417ee89df",
@@ -87,10 +93,10 @@
 			"revisionTime": "2018-02-20T23:01:11Z"
 		},
 		{
-			"checksumSHA1": "4FU6+FdqgnqpwdQRJOUZhflRyVY=",
+			"checksumSHA1": "GVC9u9N9Sk0p6FFAM1zxAqDzpfw=",
 			"path": "github.com/mtesauro/gasp",
-			"revision": "d91f7c1a75008290fba2c4b787d6614f33242be8",
-			"revisionTime": "2018-03-16T04:28:43Z"
+			"revision": "363b15874120a895d88e362776faa38a91964fd5",
+			"revisionTime": "2018-05-09T18:17:36Z"
 		},
 		{
 			"checksumSHA1": "hdyVmbhZdcRLU8ZmYgE2GqmewBo=",

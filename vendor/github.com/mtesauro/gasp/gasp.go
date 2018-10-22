@@ -59,11 +59,11 @@ type EventArgs struct {
 	Profile     string            // Required - named pipeline from master.yaml, appsec.pipeline or [app name]-pipeline.yaml
 	AppName     string            // Required - The name of the app the application that is the target of this pipeline run
 	Target      string            // Required - The target to use for this pipeline run, generally a repo URL for SAST or URL for DAST
-	PipeType    string            // Required - Type of pipeline run - currently SAST (static) or DAST (dynamic) are supported")
-	Dir         string            // default = "none" - The full path to a local directory which contains code for SAST pipeline runs
 	DryRun      bool              // default = false - Run he pipeline without actually launching containers, basically loging only
-	Clean       bool              // default = true - Remove any containers used during the pipeline run
-	Vol         string            // default = "none" - The full path to a local directory to use as the results volume instead of a data container
+	Keep        bool              // default = false - If true, keep any containers used during the pipeline run, default is to delete them
+	Vol         string            // default = "none" - The full path to a local directory to use for all pipeline run files instead of an ephemeral data container
+	Src         string            // default = "none" - The full path to a local directory which contains code for SAST pipeline runs
+	Rpt         string            // default = "none" - The full path to a local directory where tool ouput/reports will be written
 	AppProfile  string            // default = "none" - The application specific named pipeline (profile) to use for this run set in [app-name]-pipeline.yaml
 	AppToolProf string            // default = "none" - The custom tool profile to override the default tool profile as defined in [app-name]-tool.yaml
 	Loc         string            // default = "/opt/appsecpipeline/source" - Path to where the sourcecode is on the container

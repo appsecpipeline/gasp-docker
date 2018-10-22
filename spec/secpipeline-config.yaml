@@ -257,7 +257,7 @@ cloc:
   description: "cloc counts blank lines, comment lines, and physical lines of source code in many programming languages."
   url: https://github.com/AlDanial/cloc
   documentation: https://github.com/AlDanial/cloc
-  docker: "appsecpipeline/base-tools:1.8.3"
+  docker: "mtesauro/gasp-cloc:1.0.0"
   parameters:
     LOC:
       type: runtime
@@ -266,10 +266,10 @@ cloc:
   commands:
     parameters: "LOC : File or folder location of source code to examine. LOC=/temp/code"
     pre:
-    exec: "cloc"
+    exec: ""
     report: "--report-file={reportname}"
     reportname: "languages.json"
-    post: "cat {reportname}"
+    post: ""
     junit:
   profiles:
     all: "$LOC --json"
