@@ -128,7 +128,7 @@ func init() {
 		"source",
 		"s",
 		"none",
-		"The full path to a local directory which contains source code for SAST pipeline runs")
+		"The full path to a local directory to use for /opt/appsecpipeline/reports")
 
 	runCmd.Flags().StringVarP(&Rpt,
 		"reports",

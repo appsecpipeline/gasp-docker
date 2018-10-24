@@ -395,6 +395,13 @@ func launchContainer(tool g.Tools, run *runInfo) error {
 		args = append(args, "-v", lv)
 	}
 
+	//TODO: Do like the above for -r (reporting)
+	if run.Rpt != "none" {
+		rv := run.Rpt + ":/opt/appsecpipeline/source"
+		fmt.Printf("Local volume is:\n  =>%s<=\n", rv)
+		args = append(args, "-v", rv)
+	}
+
 	// Add more default args
 	args = append(args, "--net=host", "--name", dName)
 
