@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	g "github.com/mtesauro/gasp"
-	"github.com/satori/go.uuid"
+	g "github.com/appsecpipeline/gasp"
+	uuid "github.com/satori/go.uuid"
 	//"github.com/spf13/viper"
 )
 
@@ -75,12 +75,13 @@ func (levent *LocalEvent) ReadArgs(args *g.EventArgs, evArgs *g.EventArgs) {
 
 func (levent *LocalEvent) GetId() string {
 	// Generate a type 4 UUID to use as an identifier of this run
-	u, err := uuid.NewV4()
-	if err != nil {
-		errorLog.Printf("Error generating run ID, errror was: %s", err)
-		errorLog.Println("Unable to get a unique ID for this run, quitting")
-		os.Exit(1)
-	}
+	//u, err := uuid.NewV4()
+	u := uuid.NewV4()
+	//if err != nil {
+	//	errorLog.Printf("Error generating run ID, errror was: %s", err)
+	//	errorLog.Println("Unable to get a unique ID for this run, quitting")
+	//	os.Exit(1)
+	//}
 
 	return u.String()
 }

@@ -17,8 +17,8 @@ package cmd
 import (
 	"fmt"
 
-	g "github.com/mtesauro/gasp"
-	d "github.com/mtesauro/gasp-docker/gdocker"
+	g "github.com/appsecpipeline/gasp"
+	d "github.com/appsecpipeline/gasp-docker/gdocker"
 	"github.com/spf13/cobra"
 )
 

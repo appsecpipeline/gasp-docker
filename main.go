@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/mtesauro/gasp-docker/cmd"
+import "github.com/appsecpipeline/gasp-docker/cmd"
 
 func main() {
 	cmd.Execute()
